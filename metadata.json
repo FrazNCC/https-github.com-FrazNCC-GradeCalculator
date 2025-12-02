@@ -1,0 +1,5 @@
+{
+  "name": "Grade Calculator",
+  "description": "A comprehensive grade calculator for BTEC courses, featuring unit management, student record tracking, UCAS equivalence, and AI-powered grade coaching.",
+  "requestFramePermissions": []
+}
