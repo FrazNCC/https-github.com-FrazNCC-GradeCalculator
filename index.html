@@ -6,6 +6,26 @@
     <title>Grade Calculator</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    
+    <!-- React & Libraries -->
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://unpkg.com/recharts/umd/Recharts.min.js"></script>
+
+    <!-- Import Map for GenAI -->
+    <script type="importmap">
+{
+  "imports": {
+    "@google/genai": "https://esm.run/@google/genai",
+    "react/": "https://aistudiocdn.com/react@^19.2.0/",
+    "react": "https://aistudiocdn.com/react@^19.2.0",
+    "react-dom/": "https://aistudiocdn.com/react-dom@^19.2.0/",
+    "recharts": "https://aistudiocdn.com/recharts@^3.5.1"
+  }
+}
+</script>
+
     <style>
         html, body, #root { 
             height: 100%; 
@@ -14,21 +34,784 @@
             overflow: hidden; /* Prevent browser window scroll */
         }
         body { font-family: 'Inter', sans-serif; }
+        
+        /* Custom Scrollbar for internal containers */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #f1f5f9; 
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #cbd5e1; 
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #94a3b8; 
+        }
+        
+        .animate-fadeIn {
+            animation: fadeIn 0.3s ease-out forwards;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
     </style>
-<script type="importmap">
-{
-  "imports": {
-    "react": "https://aistudiocdn.com/react@^19.2.0",
-    "react-dom/": "https://aistudiocdn.com/react-dom@^19.2.0/",
-    "react/": "https://aistudiocdn.com/react@^19.2.0/",
-    "@google/genai": "https://aistudiocdn.com/@google/genai@^1.30.0",
-    "recharts": "https://aistudiocdn.com/recharts@^3.5.1"
-  }
-}
-</script>
 </head>
 <body class="bg-gray-50 text-slate-800">
     <div id="root"></div>
-    <script type="module" src="/index.tsx"></script>
+
+    <script type="text/babel" data-type="module" data-presets="react,typescript">
+        import { GoogleGenAI } from "@google/genai";
+        
+        const { useState, useEffect, useMemo } = React;
+        const { BarChart, Bar, XAxis, YAxis, Tooltip: RechartsTooltip, ResponsiveContainer, Cell } = window.Recharts;
+
+        // --- TYPES & CONSTANTS ---
+
+        const Grade = {
+            U: 'U',
+            P: 'P',
+            M: 'M',
+            D: 'D'
+        };
+
+        const POINTS_TABLE = {
+            60:  { [Grade.U]: 0, [Grade.P]: 6,  [Grade.M]: 10, [Grade.D]: 16 },
+            90:  { [Grade.U]: 0, [Grade.P]: 9,  [Grade.M]: 15, [Grade.D]: 24 },
+            120: { [Grade.U]: 0, [Grade.P]: 12, [Grade.M]: 20, [Grade.D]: 32 },
+        };
+
+        const GRADE_BOUNDARIES_1080 = [
+            { minPoints: 260, grade: 'D*D*D*', ucasPoints: 168 },
+            { minPoints: 250, grade: 'D*D*D', ucasPoints: 160 },
+            { minPoints: 230, grade: 'D*DD', ucasPoints: 152 },
+            { minPoints: 210, grade: 'DDD', ucasPoints: 144 },
+            { minPoints: 190, grade: 'DDM', ucasPoints: 128 },
+            { minPoints: 170, grade: 'DMM', ucasPoints: 112 },
+            { minPoints: 150, grade: 'MMM', ucasPoints: 96 },
+            { minPoints: 130, grade: 'MMP', ucasPoints: 80 },
+            { minPoints: 110, grade: 'MPP', ucasPoints: 64 },
+            { minPoints: 90, grade: 'PPP', ucasPoints: 48 },
+            { minPoints: 0,   grade: 'U',   ucasPoints: 0 },
+        ];
+
+        const INITIAL_ESPORTS_UNITS = [
+            { id: 'u1', number: 1, name: 'Introduction to Esports', glh: 60, type: 'Mandatory' },
+            { id: 'u2', number: 2, name: 'Esports Skills, Strategies and Analysis', glh: 120, type: 'Mandatory' },
+            { id: 'u3', number: 3, name: 'Enterprise and Entrepreneurship in the Esports Industry', glh: 90, type: 'Mandatory' },
+            { id: 'u4', number: 4, name: 'Health, Wellbeing and Fitness for Esports Players', glh: 90, type: 'Mandatory' },
+            { id: 'u5', number: 5, name: 'Esports Events', glh: 120, type: 'Mandatory' },
+            { id: 'u6', number: 6, name: 'Live-streamed Broadcasting', glh: 60, type: 'Optional' },
+            { id: 'u7', number: 7, name: 'Producing an Esports Brand', glh: 60, type: 'Optional' },
+            { id: 'u8', number: 8, name: 'Video Production', glh: 60, type: 'Optional' },
+            { id: 'u9', number: 9, name: 'Games Design', glh: 60, type: 'Optional' },
+            { id: 'u10', number: 10, name: 'Business Applications of Esports in Social Media', glh: 60, type: 'Optional' },
+            { id: 'u11', number: 11, name: 'Shoutcasting', glh: 60, type: 'Optional' },
+            { id: 'u12', number: 12, name: 'Esports Coaching', glh: 60, type: 'Optional' },
+            { id: 'u13', number: 13, name: 'Psychology for Esports Performance', glh: 60, type: 'Optional' },
+            { id: 'u14', number: 14, name: 'Nutrition for Esports Performance', glh: 60, type: 'Optional' },
+            { id: 'u15', number: 15, name: 'Ethical and Current Issues in Esports', glh: 60, type: 'Optional' },
+            { id: 'u19', number: 19, name: 'Customer Immersion Experiences', glh: 60, type: 'Optional' },
+        ];
+
+        const INITIAL_COURSES = [
+            {
+                id: 'c_esports_1080',
+                academicYear: '2024-25',
+                sector: 'Esports',
+                name: 'Esports',
+                qualification: 'Level 3 National Extended Diploma',
+                totalGLH: 1080,
+                units: INITIAL_ESPORTS_UNITS
+            }
+        ];
+
+        // --- UTILS ---
+
+        const generateId = () => Math.random().toString(36).slice(2, 9);
+
+        const getPoints = (glh, grade) => {
+            const mapping = POINTS_TABLE[glh];
+            return mapping ? (mapping[grade] || 0) : 0;
+        };
+
+        const calculateResults = (student, course) => {
+            let totalPoints = 0;
+            let currentGLH = 0;
+            let mandatoryPassed = true;
+
+            student.results.forEach(res => {
+                const unit = course.units.find(u => u.id === res.unitId);
+                if (unit) {
+                    const p = getPoints(unit.glh, res.grade);
+                    totalPoints += p;
+                    if (res.grade !== Grade.U) {
+                        currentGLH += unit.glh;
+                    }
+                    if (unit.type === 'Mandatory' && res.grade === Grade.U) {
+                        mandatoryPassed = false;
+                    }
+                }
+            });
+
+            let grade = 'U';
+            let ucas = 0;
+
+            for (const b of GRADE_BOUNDARIES_1080) {
+                if (totalPoints >= b.minPoints) {
+                    grade = b.grade;
+                    ucas = b.ucasPoints;
+                    break;
+                }
+            }
+
+            return { totalPoints, currentGLH, grade, ucas, mandatoryPassed };
+        };
+
+        // --- COMPONENTS ---
+
+        // 1. LOGIN
+        const Login = ({ onLogin }) => {
+            const [username, setUsername] = useState('');
+            const [password, setPassword] = useState('');
+            const [error, setError] = useState('');
+
+            const handleSubmit = (e) => {
+                e.preventDefault();
+                setError('');
+                const success = onLogin(username, password);
+                if (!success) {
+                    setError('Invalid username or password');
+                }
+            };
+
+            return (
+                <div className="min-h-screen bg-slate-100 flex items-center justify-center p-4">
+                    <div className="max-w-md w-full bg-white rounded-xl shadow-lg overflow-hidden border border-slate-200">
+                        <div className="bg-[#002f3b] p-8 text-center">
+                            <h1 className="text-2xl font-bold text-white tracking-tight">Grade Calculator</h1>
+                            <p className="text-blue-200 text-sm mt-2">Sign in to access the academic dashboard</p>
+                        </div>
+                        <div className="p-8">
+                            <form onSubmit={handleSubmit} className="space-y-6">
+                                {error && (
+                                    <div className="bg-red-50 border border-red-200 text-red-600 px-4 py-3 rounded text-sm text-center">
+                                        {error}
+                                    </div>
+                                )}
+                                <div>
+                                    <label className="block text-sm font-medium text-slate-700 mb-2">Username</label>
+                                    <input
+                                        type="text"
+                                        value={username}
+                                        onChange={(e) => setUsername(e.target.value)}
+                                        className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-orange-500 outline-none transition-all"
+                                        placeholder="Enter your username"
+                                        required
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-medium text-slate-700 mb-2">Password</label>
+                                    <input
+                                        type="password"
+                                        value={password}
+                                        onChange={(e) => setPassword(e.target.value)}
+                                        className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-orange-500 outline-none transition-all"
+                                        placeholder="Enter your password"
+                                        required
+                                    />
+                                </div>
+                                <button
+                                    type="submit"
+                                    className="w-full bg-orange-600 hover:bg-orange-700 text-white font-bold py-3 px-4 rounded-lg shadow transition-colors"
+                                >
+                                    Sign In
+                                </button>
+                            </form>
+                            <div className="mt-6 text-center text-xs text-slate-400">
+                                &copy; {new Date().getFullYear()} All rights reserved.
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        // 2. DASHBOARD
+        const Dashboard = ({ 
+            courses, currentUser, allUsers, onSelectCourse, 
+            onCreateCourse, onEditCourse, onDeleteCourse, 
+            onCreateUser, onEditUser, onDeleteUser 
+        }) => {
+            const [showAdminPanel, setShowAdminPanel] = useState(false);
+            const [formUsername, setFormUsername] = useState('');
+            const [formPassword, setFormPassword] = useState('');
+            const [editingUser, setEditingUser] = useState(null);
+            const [userSuccessMsg, setUserSuccessMsg] = useState('');
+
+            const groupedCourses = courses.reduce((acc, course) => {
+                const year = course.academicYear || 'Unknown Year';
+                if (!acc[year]) acc[year] = [];
+                acc[year].push(course);
+                return acc;
+            }, {});
+
+            const sortedYears = Object.keys(groupedCourses).sort().reverse();
+
+            const handleUserSubmit = (e) => {
+                e.preventDefault();
+                if (!formUsername || !formPassword) return;
+
+                if (editingUser && onEditUser) {
+                    onEditUser({ ...editingUser, username: formUsername, password: formPassword });
+                    setUserSuccessMsg(`User '${formUsername}' updated successfully.`);
+                    setEditingUser(null);
+                } else if (onCreateUser) {
+                    onCreateUser(formUsername, formPassword);
+                    setUserSuccessMsg(`User '${formUsername}' created successfully.`);
+                }
+                setFormUsername('');
+                setFormPassword('');
+                setTimeout(() => setUserSuccessMsg(''), 3000);
+            };
+
+            const handleStartEdit = (user) => {
+                setEditingUser(user);
+                setFormUsername(user.username);
+                setFormPassword(user.password);
+            };
+
+            const handleCancelEdit = () => {
+                setEditingUser(null);
+                setFormUsername('');
+                setFormPassword('');
+            };
+
+            const handleDeleteUserClick = (userId) => {
+                if (userId === currentUser.id) {
+                    alert("You cannot delete your own account.");
+                    return;
+                }
+                if (window.confirm("Are you sure you want to delete this user?")) {
+                    onDeleteUser && onDeleteUser(userId);
+                }
+            };
+
+            return (
+                <div className="max-w-7xl mx-auto space-y-8">
+                    <div className="bg-gradient-to-r from-[#002f3b] to-[#005a70] rounded-2xl p-8 text-white shadow-lg flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                        <div>
+                            <h1 className="text-3xl font-bold mb-2">Academic Dashboard</h1>
+                            <p className="text-blue-100 opacity-90">Manage your BTEC courses and grades.</p>
+                            <div className="mt-2 text-xs bg-white/10 inline-block px-2 py-1 rounded">
+                                Logged in as: <span className="font-bold">{currentUser.username}</span> ({currentUser.role})
+                            </div>
+                        </div>
+                        <div className="flex gap-3">
+                            {currentUser.role === 'admin' && (
+                                <button 
+                                    onClick={() => setShowAdminPanel(!showAdminPanel)}
+                                    className="bg-slate-700 hover:bg-slate-600 text-white px-4 py-3 rounded-lg font-bold shadow-md transition-all flex items-center gap-2"
+                                >
+                                    {showAdminPanel ? 'Hide Admin' : 'Admin Console'}
+                                </button>
+                            )}
+                            <button 
+                                onClick={onCreateCourse}
+                                className="bg-orange-600 hover:bg-orange-700 text-white px-6 py-3 rounded-lg font-bold shadow-md transition-all transform hover:scale-105"
+                            >
+                                + Create New Course
+                            </button>
+                        </div>
+                    </div>
+
+                    {showAdminPanel && currentUser.role === 'admin' && (
+                        <div className="bg-slate-800 text-white rounded-xl p-6 shadow-inner animate-fadeIn border border-slate-600 grid grid-cols-1 lg:grid-cols-2 gap-8">
+                            <div>
+                                <h3 className="font-bold text-lg mb-4">{editingUser ? 'Edit User' : 'Create New User'}</h3>
+                                <form onSubmit={handleUserSubmit} className="flex flex-col gap-4 bg-slate-700/50 p-4 rounded border border-slate-600">
+                                    <input 
+                                        type="text" 
+                                        value={formUsername}
+                                        onChange={e => setFormUsername(e.target.value)}
+                                        className="bg-slate-900 border border-slate-600 rounded p-2 text-sm text-white"
+                                        placeholder="Username"
+                                    />
+                                    <input 
+                                        type="text" 
+                                        value={formPassword}
+                                        onChange={e => setFormPassword(e.target.value)}
+                                        className="bg-slate-900 border border-slate-600 rounded p-2 text-sm text-white"
+                                        placeholder="Password"
+                                    />
+                                    <div className="flex gap-2">
+                                        <button type="submit" className="flex-1 bg-orange-600 hover:bg-orange-700 text-white px-4 py-2 rounded text-sm font-bold disabled:opacity-50" disabled={!formUsername || !formPassword}>
+                                            {editingUser ? 'Update' : 'Create'}
+                                        </button>
+                                        {editingUser && (
+                                            <button type="button" onClick={handleCancelEdit} className="px-4 py-2 bg-slate-600 hover:bg-slate-500 text-white rounded text-sm">Cancel</button>
+                                        )}
+                                    </div>
+                                </form>
+                                {userSuccessMsg && <p className="text-green-400 text-sm mt-3">{userSuccessMsg}</p>}
+                            </div>
+                            <div>
+                                <h3 className="font-bold text-lg mb-4">Manage Users</h3>
+                                <div className="bg-slate-900 rounded border border-slate-700 overflow-hidden max-h-64 overflow-y-auto">
+                                    <table className="w-full text-sm text-left">
+                                        <thead className="bg-slate-950 text-slate-400 uppercase text-xs">
+                                            <tr><th className="px-4 py-3">User</th><th className="px-4 py-3">Role</th><th className="px-4 py-3 text-right">Actions</th></tr>
+                                        </thead>
+                                        <tbody className="divide-y divide-slate-800">
+                                            {allUsers?.map(user => (
+                                                <tr key={user.id} className="hover:bg-slate-800">
+                                                    <td className="px-4 py-2 text-white">{user.username} {user.id === currentUser.id && '(YOU)'}</td>
+                                                    <td className="px-4 py-2 text-slate-400">{user.role}</td>
+                                                    <td className="px-4 py-2 text-right space-x-2">
+                                                        <button onClick={() => handleStartEdit(user)} className="text-blue-400 hover:text-blue-300 text-xs">Edit</button>
+                                                        <button onClick={() => handleDeleteUserClick(user.id)} className="text-red-400 hover:text-red-300 text-xs" disabled={user.id === currentUser.id}>Delete</button>
+                                                    </td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {courses.length === 0 ? (
+                        <div className="text-center py-20 bg-white rounded-xl border-2 border-dashed border-slate-200">
+                            <h3 className="text-xl font-bold text-slate-700">No Courses Found</h3>
+                            <button onClick={onCreateCourse} className="mt-6 text-orange-600 font-medium hover:underline">Create Course Now &rarr;</button>
+                        </div>
+                    ) : (
+                        <div className="space-y-10">
+                            {sortedYears.map(year => (
+                                <div key={year} className="animate-fadeIn">
+                                    <h2 className="text-xl font-bold text-slate-700 mb-4 flex items-center gap-3">
+                                        <span className="bg-slate-200 text-slate-700 px-3 py-1 rounded text-sm font-mono">{year}</span>
+                                        <span>Academic Year</span>
+                                    </h2>
+                                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                                        {groupedCourses[year].map(course => (
+                                            <div key={course.id} className="bg-white rounded-xl border border-slate-200 shadow-sm hover:shadow-md transition-shadow flex flex-col overflow-hidden group">
+                                                <div className="p-6 flex-1 cursor-pointer" onClick={() => onSelectCourse(course.id)}>
+                                                    <div className="flex justify-between items-start mb-4">
+                                                        <span className="px-2 py-1 rounded text-xs font-bold uppercase bg-gray-100 text-gray-700">{course.sector}</span>
+                                                        <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity" onClick={e => e.stopPropagation()}>
+                                                            <button onClick={() => onEditCourse(course)} className="text-slate-400 hover:text-blue-600">Edit</button>
+                                                            <button onClick={() => onDeleteCourse(course.id)} className="text-slate-400 hover:text-red-600">Delete</button>
+                                                        </div>
+                                                    </div>
+                                                    <h3 className="text-lg font-bold text-slate-800 mb-1 line-clamp-2">{course.name}</h3>
+                                                    <p className="text-sm text-slate-500 mb-4">{course.qualification}</p>
+                                                </div>
+                                                <div className="bg-slate-50 px-6 py-3 border-t border-slate-100 text-center text-sm font-medium text-orange-600 cursor-pointer hover:bg-orange-50 transition-colors" onClick={() => onSelectCourse(course.id)}>
+                                                    Open Calculator &rarr;
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                </div>
+            );
+        };
+
+        // 3. GRADE CALCULATOR
+        const GradeCalculator = ({ course, students, onAddStudent, onUpdateStudent }) => {
+            const [activeStudentId, setActiveStudentId] = useState(null);
+            const [isAddingStudent, setIsAddingStudent] = useState(false);
+            const [newStudentName, setNewStudentName] = useState('');
+
+            useEffect(() => {
+                if (students.length > 0 && !activeStudentId) {
+                    setActiveStudentId(students[0].id);
+                }
+            }, [students, activeStudentId]);
+
+            const activeStudent = students.find(s => s.id === activeStudentId);
+            const results = activeStudent ? calculateResults(activeStudent, course) : null;
+
+            const submitAddStudent = (e) => {
+                e.preventDefault();
+                if (newStudentName.trim()) {
+                    onAddStudent(newStudentName.trim());
+                    setNewStudentName('');
+                    setIsAddingStudent(false);
+                }
+            };
+
+            const handleGradeChange = (unitId, grade) => {
+                if (!activeStudent) return;
+                const existingIdx = activeStudent.results.findIndex(r => r.unitId === unitId);
+                let newResults = [...activeStudent.results];
+                if (existingIdx > -1) {
+                    if (newResults[existingIdx].locked) return;
+                    newResults[existingIdx] = { ...newResults[existingIdx], grade };
+                } else {
+                    newResults.push({ unitId, grade });
+                }
+                onUpdateStudent({ ...activeStudent, results: newResults });
+            };
+
+            const handleLockToggle = (unitId) => {
+                if (!activeStudent) return;
+                const existingIdx = activeStudent.results.findIndex(r => r.unitId === unitId);
+                let newResults = [...activeStudent.results];
+                if (existingIdx > -1) {
+                    newResults[existingIdx] = { ...newResults[existingIdx], locked: !newResults[existingIdx].locked };
+                } else {
+                    newResults.push({ unitId, grade: Grade.U, locked: true });
+                }
+                onUpdateStudent({ ...activeStudent, results: newResults });
+            };
+
+            const renderUnitRow = (unit) => {
+                const result = activeStudent?.results.find(r => r.unitId === unit.id);
+                const studentGrade = result?.grade || Grade.U;
+                const isLocked = result?.locked || false;
+                const points = getPoints(unit.glh, studentGrade);
+                
+                const gradeColor = {
+                    [Grade.U]: 'bg-gray-100 text-gray-500',
+                    [Grade.P]: 'bg-yellow-100 text-yellow-800',
+                    [Grade.M]: 'bg-blue-100 text-blue-800',
+                    [Grade.D]: 'bg-green-100 text-green-800',
+                }[studentGrade];
+
+                return (
+                    <tr key={unit.id} className="border-b hover:bg-slate-50 transition-colors">
+                        <td className="p-3 w-16 text-center text-slate-500">{unit.number}</td>
+                        <td className="p-3 font-medium text-slate-800">
+                            {unit.name}
+                            <div className="text-xs text-slate-400 font-normal mt-0.5">{unit.type} • {unit.glh} GLH</div>
+                        </td>
+                        <td className="p-3 w-32">
+                            <select
+                                value={studentGrade}
+                                onChange={(e) => handleGradeChange(unit.id, e.target.value)}
+                                disabled={isLocked}
+                                className={`w-full p-2 rounded text-sm font-bold border-none focus:ring-2 focus:ring-orange-500 cursor-pointer ${gradeColor} ${isLocked ? 'opacity-50 cursor-not-allowed grayscale' : ''}`}
+                            >
+                                {Object.values(Grade).map(g => (
+                                    <option key={g} value={g}>{g === Grade.U ? 'Pending / U' : g}</option>
+                                ))}
+                            </select>
+                        </td>
+                        <td className="p-3 w-12 text-center">
+                            <input 
+                                type="checkbox"
+                                checked={isLocked}
+                                onChange={() => handleLockToggle(unit.id)}
+                                className="w-5 h-5 text-orange-600 rounded focus:ring-orange-500 border-gray-300 cursor-pointer"
+                                title="Teacher Sign-off (Lock Grade)"
+                            />
+                        </td>
+                        <td className="p-3 w-20 text-right font-mono text-slate-600">{points}</td>
+                    </tr>
+                );
+            };
+
+            const mandatoryUnits = course.units.filter(u => u.type === 'Mandatory');
+            const optionalUnits = course.units.filter(u => u.type === 'Optional');
+
+            return (
+                <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 h-full">
+                    <div className="bg-white rounded-xl shadow-sm border border-slate-200 lg:col-span-1 flex flex-col h-full overflow-hidden">
+                        <div className="p-4 border-b border-slate-100 flex-none bg-white z-10">
+                            <h3 className="font-bold text-slate-700 flex justify-between items-center">
+                                Students
+                                {!isAddingStudent && (
+                                    <button onClick={() => setIsAddingStudent(true)} className="text-xs bg-slate-800 text-white px-2 py-1 rounded hover:bg-slate-700">+ New</button>
+                                )}
+                            </h3>
+                            {isAddingStudent && (
+                                <form onSubmit={submitAddStudent} className="mt-3 bg-slate-50 p-3 rounded border border-slate-200">
+                                    <input type="text" autoFocus placeholder="Name..." value={newStudentName} onChange={(e) => setNewStudentName(e.target.value)} className="w-full text-sm border rounded p-1.5 mb-2" />
+                                    <div className="flex gap-2">
+                                        <button type="submit" className="flex-1 bg-orange-600 text-white text-xs py-1 rounded">Add</button>
+                                        <button type="button" onClick={() => setIsAddingStudent(false)} className="flex-1 bg-white border border-slate-300 text-slate-600 text-xs py-1 rounded">Cancel</button>
+                                    </div>
+                                </form>
+                            )}
+                        </div>
+                        <div className="flex-1 overflow-y-auto p-2 space-y-1">
+                            {students.map(s => {
+                                const sResults = calculateResults(s, course);
+                                return (
+                                    <button key={s.id} onClick={() => setActiveStudentId(s.id)} className={`w-full text-left p-3 rounded text-sm transition-all ${activeStudentId === s.id ? 'bg-orange-50 text-orange-900 border border-orange-200 shadow-sm' : 'hover:bg-slate-50 text-slate-700 border border-transparent'}`}>
+                                        <div className="font-semibold truncate">{s.name}</div>
+                                        <div className="text-xs opacity-75 mt-1 flex justify-between">
+                                            <span>{sResults.totalPoints} pts</span>
+                                            <span className={`font-bold ${sResults.grade === 'U' ? 'text-red-500' : 'text-green-600'}`}>{sResults.grade}</span>
+                                        </div>
+                                    </button>
+                                );
+                            })}
+                        </div>
+                    </div>
+                    <div className="bg-white rounded-xl shadow-sm border border-slate-200 lg:col-span-3 flex flex-col h-full overflow-hidden relative">
+                        {!activeStudent ? (
+                            <div className="flex-1 flex flex-col items-center justify-center text-slate-400 p-10"><p>Select or create a student.</p></div>
+                        ) : (
+                            <>
+                                <div className="flex-none bg-slate-50 border-b border-slate-200 p-6 flex flex-col sm:flex-row justify-between items-center gap-4 z-20 shadow-md">
+                                    <div>
+                                        <h2 className="text-2xl font-bold text-slate-800">{activeStudent.name}</h2>
+                                        <p className="text-sm text-slate-500">{course.name}</p>
+                                    </div>
+                                    <div className="flex gap-6 text-right">
+                                        <div>
+                                            <div className="text-xs text-slate-500 uppercase font-bold">Points</div>
+                                            <div className="text-2xl font-mono font-bold text-slate-800">{results?.totalPoints}</div>
+                                        </div>
+                                        <div className="border-l pl-4">
+                                            <div className="text-xs text-slate-500 uppercase font-bold">Grade</div>
+                                            <div className={`text-2xl font-bold ${results?.grade === 'U' ? 'text-red-500' : 'text-green-600'}`}>{results?.grade}</div>
+                                        </div>
+                                        <div className="border-l pl-4">
+                                            <div className="text-xs text-slate-500 uppercase font-bold">UCAS</div>
+                                            <div className="text-2xl font-mono font-bold text-purple-600">{results?.ucas}</div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div className="flex-1 overflow-y-auto p-6 bg-white">
+                                    <div className="mb-8">
+                                        <h4 className="text-sm font-bold text-slate-500 uppercase mb-2 sticky top-0 bg-white py-2 z-10">Mandatory Units</h4>
+                                        <div className="border rounded overflow-hidden shadow-sm">
+                                            <table className="w-full text-left text-sm">
+                                                <thead className="bg-slate-50 text-slate-500 font-semibold border-b">
+                                                    <tr><th className="p-3 w-16 text-center">No.</th><th className="p-3">Unit Name</th><th className="p-3 w-32">Grade</th><th className="p-3 w-12">Lock</th><th className="p-3 w-20 text-right">Pts</th></tr>
+                                                </thead>
+                                                <tbody className="divide-y divide-slate-100 bg-white">
+                                                    {mandatoryUnits.map(u => renderUnitRow(u))}
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    </div>
+                                    <div className="pb-8">
+                                        <h4 className="text-sm font-bold text-slate-500 uppercase mb-2 sticky top-0 bg-white py-2 z-10">Optional Units</h4>
+                                        <div className="border rounded overflow-hidden shadow-sm">
+                                            <table className="w-full text-left text-sm">
+                                                <thead className="bg-slate-50 text-slate-500 font-semibold border-b">
+                                                    <tr><th className="p-3 w-16 text-center">No.</th><th className="p-3">Unit Name</th><th className="p-3 w-32">Grade</th><th className="p-3 w-12">Lock</th><th className="p-3 w-20 text-right">Pts</th></tr>
+                                                </thead>
+                                                <tbody className="divide-y divide-slate-100 bg-white">
+                                                    {optionalUnits.map(u => renderUnitRow(u))}
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    </div>
+                                </div>
+                            </>
+                        )}
+                    </div>
+                </div>
+            );
+        };
+
+        // 4. COURSE BUILDER
+        const CourseBuilder = ({ initialCourse, onSave, onCancel }) => {
+            const [sector, setSector] = useState('Esports');
+            const [academicYear, setAcademicYear] = useState('2024-25');
+            const [customName, setCustomName] = useState('');
+            const [qualification, setQualification] = useState('Level 3 National Extended Diploma');
+            const [totalGLH, setTotalGLH] = useState(1080);
+            const [units, setUnits] = useState([]);
+            const [uNumber, setUNumber] = useState(1);
+            const [uName, setUName] = useState('');
+            const [uGLH, setUGLH] = useState(60);
+            const [uType, setUType] = useState('Mandatory');
+
+            useEffect(() => {
+                if (initialCourse) {
+                    setSector(initialCourse.sector);
+                    setAcademicYear(initialCourse.academicYear || '2024-25');
+                    setCustomName(initialCourse.name);
+                    setQualification(initialCourse.qualification);
+                    setTotalGLH(initialCourse.totalGLH);
+                    setUnits(initialCourse.units);
+                    const maxNum = initialCourse.units.reduce((max, u) => Math.max(max, u.number), 0);
+                    setUNumber(maxNum + 1);
+                }
+            }, [initialCourse]);
+
+            const handleAddUnit = () => {
+                if (!uName) return;
+                const newUnit = { id: generateId(), number: uNumber, name: uName, glh: uGLH, type: uType };
+                setUnits([...units, newUnit].sort((a, b) => a.number - b.number));
+                setUNumber(prev => prev + 1);
+                setUName('');
+            };
+
+            const handleRemoveUnit = (id) => setUnits(units.filter(u => u.id !== id));
+
+            const handleSaveCourse = () => {
+                onSave({
+                    id: initialCourse ? initialCourse.id : generateId(),
+                    academicYear, sector, name: customName || sector, qualification, totalGLH, units
+                });
+            };
+
+            const getAcademicYears = () => {
+                const years = [];
+                const currentYear = new Date().getFullYear();
+                for (let i = -1; i < 5; i++) {
+                    const y = currentYear + i;
+                    years.push(`${y}-${(y + 1).toString().slice(2)}`);
+                }
+                return years;
+            };
+
+            return (
+                <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+                    <div className="bg-slate-800 text-white p-6">
+                        <h2 className="text-xl font-bold">{initialCourse ? 'Edit Course' : 'Create Course'}</h2>
+                    </div>
+                    <div className="p-6 space-y-8">
+                        <section className="space-y-4">
+                            <h3 className="font-semibold text-slate-800 border-b pb-2">1. Qualification Details</h3>
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                                <div><label className="block text-xs font-bold text-slate-500 uppercase mb-1">Academic Year</label><select value={academicYear} onChange={e => setAcademicYear(e.target.value)} className="w-full border rounded p-2 text-sm">{getAcademicYears().map(y => <option key={y} value={y}>{y}</option>)}</select></div>
+                                <div><label className="block text-xs font-bold text-slate-500 uppercase mb-1">Sector</label><select value={sector} onChange={e => setSector(e.target.value)} className="w-full border rounded p-2 text-sm"><option value="Esports">Esports</option><option value="IT">IT</option><option value="Computing">Computing</option><option value="Business">Business</option><option value="Creative Media">Creative Media</option></select></div>
+                                <div><label className="block text-xs font-bold text-slate-500 uppercase mb-1">Name</label><input type="text" value={customName} onChange={e => setCustomName(e.target.value)} className="w-full border rounded p-2 text-sm" placeholder={sector} /></div>
+                                <div><label className="block text-xs font-bold text-slate-500 uppercase mb-1">Total GLH</label><input type="number" value={totalGLH} onChange={e => setTotalGLH(Number(e.target.value))} className="w-full border rounded p-2 text-sm" /></div>
+                            </div>
+                        </section>
+                        <section className="space-y-4">
+                            <h3 className="font-semibold text-slate-800">2. Define Units</h3>
+                            <div className="bg-slate-50 p-4 rounded grid grid-cols-12 gap-2 items-end">
+                                <div className="col-span-2"><label className="block text-[10px] font-bold text-slate-500 uppercase">No.</label><input type="number" value={uNumber} onChange={e => setUNumber(Number(e.target.value))} className="w-full border rounded p-2 text-sm" /></div>
+                                <div className="col-span-6"><label className="block text-[10px] font-bold text-slate-500 uppercase">Name</label><input type="text" value={uName} onChange={e => setUName(e.target.value)} className="w-full border rounded p-2 text-sm" /></div>
+                                <div className="col-span-2"><label className="block text-[10px] font-bold text-slate-500 uppercase">GLH</label><select value={uGLH} onChange={e => setUGLH(Number(e.target.value))} className="w-full border rounded p-2 text-sm"><option value="60">60</option><option value="90">90</option><option value="120">120</option></select></div>
+                                <div className="col-span-2"><button onClick={handleAddUnit} className="w-full bg-slate-800 text-white rounded p-2 text-sm">Add</button></div>
+                            </div>
+                            <div className="overflow-hidden border rounded bg-white shadow-sm">
+                                <table className="w-full text-sm text-left">
+                                    <thead className="bg-slate-50 border-b"><tr><th className="p-3">No.</th><th className="p-3">Name</th><th className="p-3">GLH</th><th className="p-3"></th></tr></thead>
+                                    <tbody className="divide-y">{units.map(u => <tr key={u.id}><td className="p-3">{u.number}</td><td className="p-3">{u.name}</td><td className="p-3">{u.glh}</td><td className="p-3"><button onClick={() => handleRemoveUnit(u.id)} className="text-red-500 font-bold">&times;</button></td></tr>)}</tbody>
+                                </table>
+                            </div>
+                        </section>
+                        <div className="flex justify-end gap-3 pt-6 border-t"><button onClick={onCancel} className="px-4 py-2 text-slate-600 hover:bg-slate-100 rounded">Cancel</button><button onClick={handleSaveCourse} className="px-4 py-2 bg-orange-600 text-white rounded">Save</button></div>
+                    </div>
+                </div>
+            );
+        };
+
+        // 5. APP
+        const App = () => {
+            const [currentUser, setCurrentUser] = useState(null);
+            const [users, setUsers] = useState([{ id: 'admin1', username: 'Frazadmin', password: 'Frazadmin', role: 'admin' }]);
+            const [courses, setCourses] = useState(INITIAL_COURSES);
+            const [students, setStudents] = useState([]);
+            const [activeCourseId, setActiveCourseId] = useState('');
+            const [view, setView] = useState('dashboard');
+            const [courseToEdit, setCourseToEdit] = useState(undefined);
+
+            const activeCourse = courses.find(c => c.id === activeCourseId);
+            const activeStudents = students.filter(s => s.courseId === activeCourseId);
+
+            const handleLogin = (u, p) => {
+                const user = users.find(user => user.username === u && user.password === p);
+                if (user) { setCurrentUser(user); return true; }
+                return false;
+            };
+
+            const handleLogout = () => { setCurrentUser(null); setView('dashboard'); setActiveCourseId(''); };
+            const handleCreateUser = (u, p) => setUsers([...users, { id: generateId(), username: u, password: p, role: 'user' }]);
+            const handleEditUser = (updatedUser) => {
+                setUsers(users.map(u => u.id === updatedUser.id ? updatedUser : u));
+                if (currentUser && currentUser.id === updatedUser.id) setCurrentUser(updatedUser);
+            };
+            const handleDeleteUser = (userId) => setUsers(users.filter(u => u.id !== userId));
+
+            const handleSaveCourse = (savedCourse) => {
+                if (courseToEdit) setCourses(courses.map(c => c.id === savedCourse.id ? savedCourse : c));
+                else setCourses([...courses, savedCourse]);
+                setActiveCourseId(savedCourse.id);
+                setCourseToEdit(undefined);
+                setView('calculator');
+            };
+
+            const handleDeleteCourse = (courseId) => {
+                if (window.confirm("Are you sure?")) {
+                    setCourses(courses.filter(c => c.id !== courseId));
+                    setStudents(students.filter(s => s.courseId !== courseId));
+                    if (activeCourseId === courseId) { setActiveCourseId(''); setView('dashboard'); }
+                }
+            };
+
+            const handleEditCourse = (course) => { setCourseToEdit(course); setView('builder'); };
+            const handleCreateCourse = () => { setCourseToEdit(undefined); setView('builder'); };
+            const handleSelectCourse = (courseId) => { setActiveCourseId(courseId); setView('calculator'); };
+
+            const handleAddStudent = (name) => {
+                if (!activeCourse) return;
+                const initialResults = activeCourse.units.map(u => ({ unitId: u.id, grade: Grade.U, locked: false }));
+                setStudents([...students, { id: generateId(), name, courseId: activeCourse.id, results: initialResults }]);
+            };
+
+            const handleUpdateStudent = (updatedStudent) => {
+                setStudents(students.map(s => s.id === updatedStudent.id ? updatedStudent : s));
+            };
+
+            if (!currentUser) return <Login onLogin={handleLogin} />;
+
+            return (
+                <div className="h-full w-full bg-slate-100 flex flex-col overflow-hidden">
+                    <nav className="flex-none bg-[#002f3b] text-white shadow-md z-30">
+                        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+                            <div className="flex items-center gap-3 cursor-pointer" onClick={() => setView('dashboard')}>
+                                <span className="font-bold text-lg tracking-tight">Grade Calculator</span>
+                            </div>
+                            <div className="flex items-center gap-4 text-sm">
+                                <button onClick={() => setView('dashboard')} className="text-slate-300 hover:text-white">Dashboard</button>
+                                {activeCourseId && <button onClick={() => setView('calculator')} className="text-slate-300 hover:text-white">Calculator</button>}
+                                <div className="flex items-center gap-2 border-l border-slate-700 pl-4">
+                                    <span className="text-slate-300">{currentUser.username}</span>
+                                    <button onClick={handleLogout} className="text-orange-400 font-medium">Logout</button>
+                                </div>
+                            </div>
+                        </div>
+                    </nav>
+                    <main className="flex-1 flex flex-col min-h-0 w-full max-w-7xl mx-auto p-4 sm:p-6 lg:p-8">
+                        {view === 'dashboard' && (
+                            <div className="flex-1 overflow-y-auto pr-2 pb-10">
+                                <Dashboard courses={courses} currentUser={currentUser} allUsers={users} onSelectCourse={handleSelectCourse} onCreateCourse={handleCreateCourse} onEditCourse={handleEditCourse} onDeleteCourse={handleDeleteCourse} onCreateUser={handleCreateUser} onEditUser={handleEditUser} onDeleteUser={handleDeleteUser} />
+                            </div>
+                        )}
+                        {view === 'calculator' && (
+                            <div className="flex-1 flex flex-col min-h-0 space-y-4">
+                                <div className="flex-none bg-white p-4 rounded-lg shadow-sm border border-slate-200 flex items-center gap-4 z-20">
+                                    <div className="flex-1"><label className="text-xs font-bold text-slate-500 uppercase block mb-1">Active Course</label><select value={activeCourseId} onChange={(e) => setActiveCourseId(e.target.value)} className="w-full p-2 border rounded bg-slate-50">{courses.map(c => <option key={c.id} value={c.id}>[{c.academicYear}] {c.name}</option>)}</select></div>
+                                    <button onClick={() => activeCourse && handleEditCourse(activeCourse)} className="px-3 py-2 bg-slate-100 border rounded">Edit Spec</button>
+                                    <button onClick={() => setView('dashboard')} className="px-4 py-2 bg-slate-800 text-white rounded">Back</button>
+                                </div>
+                                <div className="flex-1 min-h-0 relative">
+                                    {activeCourse ? <GradeCalculator course={activeCourse} students={activeStudents} onAddStudent={handleAddStudent} onUpdateStudent={handleUpdateStudent} /> : <p>No course.</p>}
+                                </div>
+                            </div>
+                        )}
+                        {view === 'builder' && (
+                            <div className="flex-1 overflow-y-auto pr-2 pb-10">
+                                <div className="max-w-4xl mx-auto"><CourseBuilder initialCourse={courseToEdit} onSave={handleSaveCourse} onCancel={() => setView(activeCourseId ? 'calculator' : 'dashboard')} /></div>
+                            </div>
+                        )}
+                    </main>
+                </div>
+            );
+        };
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
 </body>
 </html>
