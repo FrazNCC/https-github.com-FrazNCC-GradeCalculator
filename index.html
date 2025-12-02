@@ -13,15 +13,14 @@
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     <script src="https://unpkg.com/recharts/umd/Recharts.min.js"></script>
 
-    <!-- Import Map for GenAI and React -->
+    <!-- Import Map for GenAI -->
     <script type="importmap">
 {
   "imports": {
     "@google/genai": "https://esm.run/@google/genai",
-    "react": "https://esm.sh/react@18",
-    "react-dom/client": "https://esm.sh/react-dom@18/client",
-    "react-dom/": "https://aistudiocdn.com/react-dom@^19.2.0/",
     "react/": "https://aistudiocdn.com/react@^19.2.0/",
+    "react": "https://aistudiocdn.com/react@^19.2.0",
+    "react-dom/": "https://aistudiocdn.com/react-dom@^19.2.0/",
     "recharts": "https://aistudiocdn.com/recharts@^3.5.1"
   }
 }
@@ -69,11 +68,7 @@
         import ReactDOM from 'react-dom/client';
         import { GoogleGenAI } from "@google/genai";
         
-        // Recharts global access since UMD build attaches to window
-        const { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } = window.Recharts || {};
-
-        // --- TYPES ---
-        // (Simulating interfaces and enums for Babel Standalone)
+        // --- CONSTANTS & TYPES ---
 
         const Grade = {
             U: 'U',
@@ -81,8 +76,6 @@
             M: 'M',
             D: 'D'
         };
-
-        // --- CONSTANTS ---
 
         const POINTS_TABLE = {
             60:  { [Grade.U]: 0, [Grade.P]: 6,  [Grade.M]: 10, [Grade.D]: 16 },
@@ -716,17 +709,56 @@
                         </section>
                         <section className="space-y-4">
                             <h3 className="font-semibold text-slate-800">2. Define Units</h3>
-                            <div className="bg-slate-50 p-4 rounded grid grid-cols-12 gap-2 items-end">
-                                <div className="col-span-2"><label className="block text-[10px] font-bold text-slate-500 uppercase">No.</label><input type="number" value={uNumber} onChange={e => setUNumber(Number(e.target.value))} className="w-full border rounded p-2 text-sm" /></div>
-                                <div className="col-span-6"><label className="block text-[10px] font-bold text-slate-500 uppercase">Name</label><input type="text" value={uName} onChange={e => setUName(e.target.value)} className="w-full border rounded p-2 text-sm" /></div>
-                                <div className="col-span-2"><label className="block text-[10px] font-bold text-slate-500 uppercase">GLH</label><select value={uGLH} onChange={e => setUGLH(Number(e.target.value))} className="w-full border rounded p-2 text-sm"><option value="60">60</option><option value="90">90</option><option value="120">120</option></select></div>
-                                <div className="col-span-2"><label className="block text-[10px] font-bold text-slate-500 uppercase">Type</label><select value={uType} onChange={e => setUType(e.target.value)} className="w-full border rounded p-2 text-sm"><option value="Mandatory">Mandatory</option><option value="Optional">Optional</option></select></div>
-                                <div className="col-span-12"><button onClick={handleAddUnit} className="w-full bg-slate-800 text-white rounded p-2 text-sm">Add Unit</button></div>
+                            {/* Updated Unit Definition Grid with Better Layout */}
+                            <div className="bg-slate-50 p-4 rounded border border-slate-200 shadow-sm">
+                                <div className="grid grid-cols-12 gap-3 items-end">
+                                    <div className="col-span-2 md:col-span-1">
+                                        <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">No.</label>
+                                        <input type="number" value={uNumber} onChange={e => setUNumber(Number(e.target.value))} className="w-full border rounded p-2 text-sm" />
+                                    </div>
+                                    <div className="col-span-10 md:col-span-5">
+                                        <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Unit Name</label>
+                                        <input type="text" value={uName} onChange={e => setUName(e.target.value)} className="w-full border rounded p-2 text-sm" placeholder="e.g. Systems Architecture" />
+                                    </div>
+                                    <div className="col-span-4 md:col-span-2">
+                                        <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">GLH</label>
+                                        <select value={uGLH} onChange={e => setUGLH(Number(e.target.value))} className="w-full border rounded p-2 text-sm bg-white">
+                                            <option value="60">60</option>
+                                            <option value="90">90</option>
+                                            <option value={120}>120</option>
+                                        </select>
+                                    </div>
+                                    <div className="col-span-4 md:col-span-2">
+                                        <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Type</label>
+                                        <select value={uType} onChange={e => setUType(e.target.value)} className="w-full border rounded p-2 text-sm bg-white">
+                                            <option value="Mandatory">Mandatory</option>
+                                            <option value="Optional">Optional</option>
+                                        </select>
+                                    </div>
+                                    <div className="col-span-4 md:col-span-2">
+                                        <button onClick={handleAddUnit} className="w-full bg-slate-800 text-white rounded p-2 text-sm hover:bg-slate-700 font-medium h-[38px] flex items-center justify-center">
+                                            + Add
+                                        </button>
+                                    </div>
+                                </div>
                             </div>
+
                             <div className="overflow-hidden border rounded bg-white shadow-sm">
                                 <table className="w-full text-sm text-left">
-                                    <thead className="bg-slate-50 border-b"><tr><th className="p-3">No.</th><th className="p-3">Name</th><th className="p-3">Type</th><th className="p-3">GLH</th><th className="p-3"></th></tr></thead>
-                                    <tbody className="divide-y">{units.map(u => <tr key={u.id}><td className="p-3 text-center">{u.number}</td><td className="p-3">{u.name}</td><td className="p-3">{u.type}</td><td className="p-3 text-center">{u.glh}</td><td className="p-3 text-center"><button onClick={() => handleRemoveUnit(u.id)} className="text-red-500 font-bold">&times;</button></td></tr>)}</tbody>
+                                    <thead className="bg-slate-50 border-b"><tr><th className="p-3">No.</th><th className="p-3">Name</th><th className="p-3">Type</th><th className="p-3">GLH</th><th className="p-3 text-center">Delete</th></tr></thead>
+                                    <tbody className="divide-y">{units.map(u => (
+                                        <tr key={u.id}>
+                                            <td className="p-3 text-center">{u.number}</td>
+                                            <td className="p-3">{u.name}</td>
+                                            <td className="p-3">{u.type}</td>
+                                            <td className="p-3 text-center">{u.glh}</td>
+                                            <td className="p-3 text-center">
+                                                <button onClick={() => handleRemoveUnit(u.id)} className="text-red-500 hover:text-red-700 p-1 hover:bg-red-50 rounded" title="Delete Unit">
+                                                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+                                                </button>
+                                            </td>
+                                        </tr>
+                                    ))}</tbody>
                                 </table>
                             </div>
                         </section>
