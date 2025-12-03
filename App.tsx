@@ -1,9 +1,11 @@
+
 import React, { useState } from 'react';
-import { Course, Student, Grade, User } from './types';
+import { Course, Student, Grade, User, UserRole } from './types';
 import { INITIAL_COURSES } from './constants';
 import { CourseBuilder } from './components/CourseBuilder';
 import { GradeCalculator } from './components/GradeCalculator';
 import Dashboard from './components/Dashboard';
+import AdminDashboard from './components/AdminDashboard';
 import Login from './components/Login';
 import { generateId } from './utils';
 
@@ -18,7 +20,7 @@ const App: React.FC = () => {
   const [courses, setCourses] = useState<Course[]>(INITIAL_COURSES);
   const [students, setStudents] = useState<Student[]>([]);
   const [activeCourseId, setActiveCourseId] = useState<string>('');
-  const [view, setView] = useState<'dashboard' | 'calculator' | 'builder'>('dashboard');
+  const [view, setView] = useState<'dashboard' | 'calculator' | 'builder' | 'admin'>('dashboard');
   const [courseToEdit, setCourseToEdit] = useState<Course | undefined>(undefined);
 
   // Derived State
@@ -30,6 +32,11 @@ const App: React.FC = () => {
     const user = users.find(user => user.username === u && user.password === p);
     if (user) {
       setCurrentUser(user);
+      if (user.role === 'admin') {
+          setView('admin');
+      } else {
+          setView('dashboard');
+      }
       return true;
     }
     return false;
@@ -41,12 +48,12 @@ const App: React.FC = () => {
     setActiveCourseId('');
   };
 
-  const handleCreateUser = (u: string, p: string) => {
+  const handleCreateUser = (u: string, p: string, role: UserRole = 'teacher') => {
     const newUser: User = {
       id: generateId(),
       username: u,
       password: p,
-      role: 'user'
+      role
     };
     setUsers([...users, newUser]);
   };
@@ -60,7 +67,7 @@ const App: React.FC = () => {
   };
 
   const handleDeleteUser = (userId: string) => {
-      setUsers(users.filter(u => u.id !== userId));
+      setUsers(prevUsers => prevUsers.filter(u => u.id !== userId));
   };
 
   // Course Handlers
@@ -152,11 +159,19 @@ const App: React.FC = () => {
           </div>
           <div className="flex items-center gap-4 text-sm">
              <div className="hidden md:flex gap-2">
+               {currentUser.role === 'admin' && (
+                  <button 
+                      onClick={() => setView('admin')}
+                      className={`px-3 py-1 rounded transition-colors ${view === 'admin' ? 'bg-white/10 text-white' : 'text-slate-300 hover:text-white'}`}
+                  >
+                      Admin
+                  </button>
+               )}
                <button 
                   onClick={() => setView('dashboard')}
                   className={`px-3 py-1 rounded transition-colors ${view === 'dashboard' ? 'bg-white/10 text-white' : 'text-slate-300 hover:text-white'}`}
                >
-                  Dashboard
+                  Courses
                </button>
                {activeCourseId && (
                   <button 
@@ -166,12 +181,6 @@ const App: React.FC = () => {
                       Calculator
                   </button>
                )}
-               <button 
-                  onClick={handleCreateCourse}
-                  className={`px-3 py-1 rounded transition-colors ${view === 'builder' ? 'bg-white/10 text-white' : 'text-slate-300 hover:text-white'}`}
-               >
-                  Builder
-               </button>
              </div>
              
              <div className="h-6 w-px bg-slate-700 mx-1"></div>
@@ -192,19 +201,27 @@ const App: React.FC = () => {
       {/* Main Content Area */}
       <main className="flex-1 flex flex-col min-h-0 w-full max-w-7xl mx-auto p-4 sm:p-6 lg:p-8">
         
+        {view === 'admin' && currentUser.role === 'admin' && (
+            <div className="flex-1 overflow-y-auto pr-2 pb-10">
+                <AdminDashboard 
+                    currentUser={currentUser}
+                    allUsers={users}
+                    onCreateUser={handleCreateUser}
+                    onEditUser={handleEditUser}
+                    onDeleteUser={handleDeleteUser}
+                />
+            </div>
+        )}
+
         {view === 'dashboard' && (
             <div className="flex-1 overflow-y-auto pr-2 pb-10">
                 <Dashboard 
                     courses={courses}
                     currentUser={currentUser}
-                    allUsers={users}
                     onSelectCourse={handleSelectCourse}
                     onCreateCourse={handleCreateCourse}
                     onEditCourse={handleEditCourse}
                     onDeleteCourse={handleDeleteCourse}
-                    onCreateUser={handleCreateUser}
-                    onEditUser={handleEditUser}
-                    onDeleteUser={handleDeleteUser}
                 />
             </div>
         )}
@@ -254,6 +271,7 @@ const App: React.FC = () => {
                   students={activeStudents}
                   onAddStudent={handleAddStudent}
                   onUpdateStudent={handleUpdateStudent}
+                  currentUser={currentUser}
                 />
               ) : (
                 <div className="text-center py-20 bg-white rounded-lg border border-dashed border-slate-300 h-full flex items-center justify-center">

@@ -8,7 +8,7 @@ export enum Grade {
 
 export type UnitType = 'Mandatory' | 'Optional';
 export type Sector = 'Esports' | 'Computing' | 'IT' | 'Business' | 'Creative Media' | 'Other';
-export type UserRole = 'admin' | 'user';
+export type UserRole = 'admin' | 'teacher';
 
 export interface UnitDefinition {
   id: string;
